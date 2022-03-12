@@ -1,0 +1,12 @@
+name: codeforecon
+channels:
+  - conda-forge
+dependencies:
+  - numpy
+  - pandas
+  - pip
+  - altair
+  - pandasdmx
+  - matplotlib
+  - requests_cache
+  - python=3.9
