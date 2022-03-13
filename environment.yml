@@ -10,3 +10,5 @@ dependencies:
   - matplotlib
   - requests_cache
   - python=3.9
+  - pandas-datareader
+  - streamlit
