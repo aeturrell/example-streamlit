@@ -5,7 +5,7 @@ import numpy as np
 import datetime
 import matplotlib.pyplot as plt
 import pandasdmx as pdmx
-import pandas_datareader as pdr
+import pandas_datareader.data as web
 
 
 # Plot settings
@@ -72,19 +72,6 @@ def get_oecd_data():
     )
     # then shares as a pct
     df_oecd["fraction"] = 100 * df_oecd["value"] / df_oecd["GDP"]
-    # then find the industry with greatest fraction in each time period
-    df_oecd["max_frac"] = df_oecd.groupby("datetime")["fraction"].transform(
-        lambda x: x.max()
-    )
-    df_oecd["argmax_frac"] = (
-        df_oecd.groupby(["datetime"])["fraction"]
-        .transform(lambda x: x.idxmax())
-        .astype("Int32")
-    )
-    df_oecd["frac_ind"] = pd.NA
-    df_oecd.loc[:, "frac_ind"] = df_oecd.loc[
-        df_oecd["argmax_frac"].fillna(0), "industry"
-    ].values
     return df_oecd
 
 
@@ -183,24 +170,22 @@ st.write("Try changing the multi-select box above to see how the chart changes."
 
 st.markdown("#### Matplotlib")
 
-logscale = st.checkbox("Log scale?", False)
-
-import pandas_datareader.data as web
-
+# Get FRED data on UK wages
 start = datetime.datetime(1919, 1, 1)
 end = datetime.datetime(2016, 1, 1)
 fred_uk_awe = web.DataReader("AWEPPUKQ", "fred", start, end)
 
+# Interactive to choose log or linear scale
+logscale = st.checkbox("Log scale?", False)
 
-scale_txt = "linear scale"
-if logscale:
-    scale_txt = "log scale"
-
+# Plot chart
 fig, ax = plt.subplots()
 ax.plot(fred_uk_awe)
 ax.set_ylim(1, None)
 ax.set_ylabel("Seasonally adjusted GBP")
-ax.set_title(f"Average weekly earnings per person in the UK ({scale_txt})", loc="left")
+scale_txt = "linear scale"
 if logscale:
+    scale_txt = "log scale"
     ax.set_yscale("log")
+ax.set_title(f"Average weekly earnings per person in the UK ({scale_txt})", loc="left")
 st.pyplot(fig)
