@@ -1,4 +1,4 @@
-name: codeforecon
+name: streamlit
 channels:
   - conda-forge
 dependencies:

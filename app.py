@@ -13,10 +13,41 @@ plt.style.use(
     "https://github.com/aeturrell/coding-for-economists/raw/main/plot_style.txt"
 )
 
+# Page settings
+st.set_page_config(
+    page_title="An example streamlit app",
+    page_icon="👩‍💻",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# ----------------------------------------------------------------
+# This section is just data retrieval and not directly about the dashboard
+# ----------------------------------------------------------------
+# settings to retrieve OECD data
+industry_dict = {
+    "B1GVA": "Agriculture, forestry, and fishing.",
+    "B1GVB_E": "Industry, including energy",
+    "B1GVF": "Construction",
+    "B1GVG_I": "Distrib. trade",
+    "B1GVJ": "Information and communication",
+    "B1GVK": "Financial and insurance",
+    "B1GVL": "Real estate",
+    "B1GVM_N": "Prof. services",
+    "B1GVO_Q": "Public Admin",
+    "B1GVR_U": "Other services",
+}
+codes = list(industry_dict.keys())
+industry_names = list(industry_dict.values())
 
 # Functions
 @st.cache
 def get_oecd_data():
+    """Grabs OECD data in tidy format.
+
+    :return: OECD output data by time-sector for UK
+    :rtype: pandas dataframe
+    """
     # Tell pdmx we want OECD data
     oecd = pdmx.Request("OECD")
     # Set out everything about the request in the format specified by the OECD API
@@ -71,54 +102,57 @@ def get_oecd_data():
         lambda x: x.sum()
     )
     # then shares as a pct
-    df_oecd["fraction"] = 100 * df_oecd["value"] / df_oecd["GDP"]
+    df_oecd["Percent"] = round(100 * df_oecd["value"] / df_oecd["GDP"], 2)
     return df_oecd
 
 
-# Rest of dashboard
+@st.cache
+def fred_data_uk_wages():
+    """Long run UK average wages from FRED
 
+    :return: wages in dataframe
+    :rtype: pandas dataframe
+    """
+    start = datetime.datetime(1919, 1, 1)
+    end = datetime.datetime(2016, 1, 1)
+    return web.DataReader("AWEPPUKQ", "fred", start, end)
+
+
+# ----------------------------------------------------------------
+# Dashboard
+# ----------------------------------------------------------------
 st.title("An example dashboard")
 # Here's some text...
-intro_text = (
-    "This is a short example dashboard demonstrating the key capabilities of streamlit."
-)
+intro_text = "This is a short example dashboard demonstrating some of the basic functionality of streamlit."
 # ...but it only appears in the script when we call `st.write`
 st.write(intro_text)
-
 # Here's some markdown
 st.markdown("### This is a markdown subtitle")
 st.markdown(
     "Regular markdown syntax, inlcuding [links](https://aeturrell.github.io/coding-for-economists), will work. You can use `st.latex` to embed latex equations. Here's the result of using that command:"
 )
 # Here's an example of a latex equation:
-st.latex(
-    r"{\displaystyle {\frac {\partial L}{\partial q^{i}}}(t,{\boldsymbol {q}}(t),{\dot {\boldsymbol {q}}}(t))-{\frac {\mathrm {d} }{\mathrm {d} t}}{\frac {\partial L}{\partial {\dot {q}}^{i}}}(t,{\boldsymbol {q}}(t),{\dot {\boldsymbol {q}}}(t))=0,\quad i=1,\dots ,n.}"
-)
+st.latex(r"Y = \beta_0 + \beta_1X + \varepsilon")
 
+st.markdown("### Data: in two columns using `st.columns`")
 
-st.markdown("### Data")
+c1, c2 = st.columns((1, 1))
+c1.write("#### OECD Data")
 text = "We're going to download data from the OECD API for the UK by *industry*. We can wrap up the data retrieval and cleaning in a function and cache it using `st.cache`; very helpful if you're using an API."
-st.write(text)
+c1.write(text)
 
-industry_dict = {
-    "B1GVA": "Agriculture, forestry, and fishing.",
-    "B1GVB_E": "Industry, including energy",
-    "B1GVF": "Construction",
-    "B1GVG_I": "Distrib. trade",
-    "B1GVJ": "Information and communication",
-    "B1GVK": "Financial and insurance",
-    "B1GVL": "Real estate",
-    "B1GVM_N": "Prof. services",
-    "B1GVO_Q": "Public Admin",
-    "B1GVR_U": "Other services",
-}
-codes = list(industry_dict.keys())
-industry_names = list(industry_dict.values())
 
 df = get_oecd_data()
-
-st.write("Data downloaded successfully! First few lines:")
-st.write(df.head())
+c1.write("Here are the first few lines of the OECD data:")
+c1.write(df.head())
+c2.write("#### FRED Data")
+c2.write(
+    "We're also going to download data from FRED. This will cover historical wages and, later, we'll give the option to plot it on both a log and a linear scale."
+)
+# Get FRED data on UK wages
+fred_uk_awe = fred_data_uk_wages()
+c2.write("FRED UK wage data first few lines:")
+c2.write(fred_uk_awe.head())
 
 st.markdown("### Metrics")
 st.write(
@@ -129,20 +163,28 @@ st.write(
 # subset to most recent data
 subdf = df.loc[df["datetime"] == df["datetime"].max(), :]
 rise_ind, rise_growth = subdf["max_ind"].iloc[0], subdf["max"].iloc[0] * 100
-rise_share = subdf.loc[subdf["industry"] == rise_ind, "fraction"]
+rise_share = subdf.loc[subdf["industry"] == rise_ind, "Percent"]
 fall_ind, fall_growth = subdf["min_ind"].iloc[0], subdf["min"].iloc[0] * 100
-fall_share = subdf.loc[subdf["industry"] == fall_ind, "fraction"]
+fall_share = subdf.loc[subdf["industry"] == fall_ind, "Percent"]
 
-st.write(f"#### For quarter ending {df['datetime'].max():%Y-%m-%d}")
+st.write(
+    f"#### For the quarter ending {df['datetime'].max():%Y-%m-%d}, the biggest moves were:"
+)
 
 col1, col2 = st.columns(2)
 col1.metric("Biggest rise:", f"{rise_ind}", f"{rise_growth:.2f} %")
 col2.metric("Biggest fall:", f"{fall_ind}", f"{fall_growth:.2f} %")
 
-st.markdown("### Charts")
+
+st.markdown("### Charts and Interactivity")
+
+st.write(
+    "This section will show how to make charts using **altair** and **matplotlib**, two different plotting libraries. In both cases, we have added interactive elements so that the user can change the charts and have them update instantly."
+)
+
 st.markdown("#### Altair")
 st.write(
-    "We're going to try plotting data on UK output by sector sourced from the OECD."
+    "We're going to plot data on UK output by sector sourced from the OECD. Note that altair charts have some interactivity built in (try zooming in or out, or hovering your mouse)."
 )
 # Let's give users a multi-select box to choose industries
 chosen_industries = st.multiselect(
@@ -153,7 +195,7 @@ subdf = df[df["industry"].isin(chosen_industries)]
 
 graph = (
     alt.Chart(subdf)
-    .mark_bar(size=15)
+    .mark_bar(size=20)
     .encode(
         alt.Y("value:Q", scale=alt.Scale(domain=(0, 600e3))),
         x="datetime:T",
@@ -168,21 +210,19 @@ graph = (
 st.altair_chart(graph, use_container_width=True)
 st.write("Try changing the multi-select box above to see how the chart changes.")
 
+
 st.markdown("#### Matplotlib")
-
-# Get FRED data on UK wages
-start = datetime.datetime(1919, 1, 1)
-end = datetime.datetime(2016, 1, 1)
-fred_uk_awe = web.DataReader("AWEPPUKQ", "fred", start, end)
-
 # Interactive to choose log or linear scale
+st.write(
+    "This next chart is plotted by **matplotlib**, and doesn't come with any built-in interactivity. However, we have added interactivity using streamlit; the checkbox allows you to show the data on a log or linear scale."
+)
 logscale = st.checkbox("Log scale?", False)
 
 # Plot chart
-fig, ax = plt.subplots()
+fig, ax = plt.subplots(figsize=(6, 3), dpi=150)
 ax.plot(fred_uk_awe)
 ax.set_ylim(1, None)
-ax.set_ylabel("Seasonally adjusted GBP")
+ax.set_ylabel("Seasonally adjusted GBP (nominal)")
 scale_txt = "linear scale"
 if logscale:
     scale_txt = "log scale"
